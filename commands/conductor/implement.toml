@@ -39,14 +39,119 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         3.  If no match is found, or if the match is ambiguous, inform the user and ask for clarification. Suggest the next available track as below.
     -   **If no track name was provided (or if the previous step failed):**
         1.  **Identify Next Track:** Find the first track in the parsed tracks file that is NOT marked as `[x] Completed`.
-        2.  **If a next track is found:**
+        2.  **Dead Session Prevention Loop:** For each candidate track (in order):
+                a. **Check If Already Complete:** Read the track's `plan.md`
+                b. **Count Tasks:** Count tasks marked `[x]` vs `[ ]` vs `[~]`
+                c. **Skip If All Complete:** If all tasks are `[x]`:
+                        -   Announce: "Track '<track_description>' has all tasks complete. Marking as done and skipping to next."
+                        -   Update track status to `[x]` in tracks.md
+                        -   Continue to next track
+                d. **Select If Has Work:** If any `[ ]` or `[~]` tasks remain:
+                        -   Select this track for implementation
+                        -   Break the loop
+        3.  **If a next track is found:**
             -   Announce: "No track name provided. Automatically selecting the next incomplete track: '<track_description>'."
             -   Proceed with this track.
-        3.  **If no incomplete tracks are found:**
+        4.  **If no incomplete tracks are found:**
             -   Announce: "No incomplete tracks found in the tracks file. All tasks are completed!"
             -   Halt the process and await further user instructions.
 
 5.  **Handle No Selection:** If no track is selected, inform the user and await further instructions.
+
+---
+
+## 2.1 SESSION THROTTLING (CRITICAL)
+**PROTOCOL: Prevent infinite loops and resource exhaustion.**
+
+1.  **Throttle Limits:** Enforce these limits to prevent runaway sessions:
+        -   **MAX_TASKS_PER_SESSION**: 5 tasks maximum per session
+        -   **MAX_FILES_PER_SESSION**: 10 file operations maximum per session
+        -   **MAX_TIME_PER_SESSION**: 10 minutes maximum per session (check elapsed time before each task)
+        -   **MAX_HEAP_BYTES**: 8GB maximum heap usage (8589934592 bytes)
+
+2.  **Session State Tracking:**
+        -   **Task Counter**: Initialize `tasks_completed_this_session = 0`
+        -   **File Counter**: Initialize `files_processed_this_session = 0`
+        -   **Start Time**: Record session start time
+        -   **Last Task Position**: Track the last `[x]` task position to resume from next time
+
+3.  **Pre-Task Check:** Before each task execution:
+        a. **Check Task Limit:** If `tasks_completed_this_session >= MAX_TASKS_PER_SESSION`:
+                -   Announce: "Session throttle limit reached: {MAX_TASKS_PER_SESSION} tasks completed. Pausing for next session."
+                -   Skip remaining tasks in current track
+                -   Return to user with progress summary
+        b. **Check File Limit:** If `files_processed_this_session >= MAX_FILES_PER_SESSION`:
+                -   Announce: "Session file limit reached: {MAX_FILES_PER_SESSION} files processed. Pausing for next session."
+                -   Skip remaining tasks in current track
+                -   Return to user with progress summary
+        c. **Check Time Limit:** Calculate elapsed time since session start
+                -   **If Time Exceeded:** Announce: "Session time limit reached: {MAX_TIME_PER_SESSION} minutes. Pausing for next session."
+                -   Return to user with progress summary
+        d. **Check Heap Limit:** Estimate memory usage (context tokens + tool outputs)
+                -   **If Heap Approaching Limit:** Announce: "Session heap approaching 8GB limit. Pausing for next session."
+                -   Return to user with progress summary
+
+4.  **Progress Persistence:**
+        -   Update task checkboxes in `plan.md` as tasks complete
+        -   Plan.md serves as persistent state across sessions
+        -   Next session resumes from first `[ ]` task after last `[~]` or `[x]`
+
+5.  **Dead Session Prevention:**
+        -   **Skip Completed Tracks**: Never select tracks marked `[x]`
+        -   **Check Plan State**: Before selecting a `[~]` track, read its `plan.md`
+        -   **Skip If No Remaining Tasks**: If all tasks in `plan.md` are already `[x]`, mark track as complete and skip to next
+
+---
+
+## 2.2 CONTEXT BOUNDARY ENGINEERING
+**PROTOCOL: Define optimal context windows for task agents to maximize efficiency.**
+
+**CRITICAL: Task agents MUST operate under strict context budgets to prevent clutter and preserve reasoning capacity.**
+
+1.  **Context Budget Allocation (Target: <10% of available window per task):**
+    -   **ORCHESTRATOR CONTEXT** (this implement protocol): Retained by main agent only
+    -   **TASK AGENT CONTEXT**: Minimal, focused, disposable per-task
+
+2.  **Task Agent Context Boundaries (HARD LIMITS):**
+    Each spawned task agent receives ONLY:
+
+    | Component | Max Tokens | Content |
+    |-----------|------------|---------|
+    | Task Definition | 200 | Single task from plan.md with acceptance criteria |
+    | Spec Excerpt | 500 | ONLY the section of spec.md relevant to this task |
+    | Workflow Rules | 300 | Red-Green-Refactor cycle rules ONLY |
+    | Tech Stack | 200 | Language/framework constraints ONLY |
+    | Target Files | Variable | Files to be created/modified (read on-demand) |
+    | **TOTAL OVERHEAD** | **~1200** | **<10% of typical 128k context** |
+
+3.  **Context Exclusion List (NEVER pass to task agents):**
+    -   This implement.toml protocol
+    -   Full tracks.md file
+    -   Other track specs/plans
+    -   product.md (unless task explicitly requires product context)
+    -   product-guidelines.md
+    -   Git history beyond current HEAD
+    -   Previous task outputs from same session
+
+4.  **Spec Sectioning Protocol:**
+    Before spawning task agent:
+    a. Parse spec.md to identify section headers
+    b. Match current task name to relevant spec section(s)
+    c. Extract ONLY matched sections (typically 1-2)
+    d. If no clear match, extract Requirements section only
+
+5.  **On-Demand File Loading:**
+    Task agents MUST NOT preload entire codebase. Instead:
+    a. Start with task definition + spec excerpt
+    b. Agent identifies files needed via semantic search or grep
+    c. Agent loads files incrementally as needed
+    d. Each file load counts against FILES_PROCESSED limit
+
+6.  **Context Freedom Metrics:**
+    After task completion, verify:
+    -   Task agent used <10% context for overhead
+    -   Remaining 90%+ available for actual implementation reasoning
+    -   No context pollution from unrelated tracks/tasks
 
 ---
 
@@ -66,21 +171,292 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         - `conductor/tracks/<track_id>/spec.md`
         - `conductor/workflow.md`
     c. **Error Handling:** If you fail to read any of these files, you MUST stop and inform the user of the error.
+    d. **CLEANUP CRASHED SESSIONS (Fix for dead session recursion):**
+        -   Check plan.md for any `[~]` (in-progress) tasks
+        -   **If found:** These indicate a crashed/interrupted previous session
+        -   **Action:** Change ALL `[~]` tasks back to `[ ]`
+        -   **Rationale:** Tasks should only be `[~]` while actively being executed. Leftover `[~]` means crash.
+        -   **Save:** Write updated plan.md to disk
+        -   **Announce:** Report if any tasks were reset (e.g., "Found 2 crashed tasks, reset to pending")
 
 4.  **Execute Tasks and Update Track Plan:**
-    a. **Announce:** State that you will now execute the tasks from the track's `plan.md` by following the procedures in `workflow.md`.
-    b. **Iterate Through Tasks:** You MUST now loop through each task in the track's `plan.md` one by one.
-    c. **For Each Task, You MUST:**
-        i. **Defer to Workflow:** The `workflow.md` file is the **single source of truth** for the entire task lifecycle. You MUST now read and execute the procedures defined in the "Task Workflow" section of the `workflow.md` file you have in your context. Follow its steps for implementation, testing, and committing precisely.
+    a. **Initialize Session Counters:**
+        -   `tasks_completed_this_session = 0`
+        -   `files_processed_this_session = 0`
+        -   `session_start_time = current_time()`
+        -   Count existing `[x]` tasks in plan.md (these don't count against session limit)
 
-5.  **Finalize Track:**
-    -   After all tasks in the track's local `plan.md` are completed, you MUST update the track's status in the tracks file.
-    -   This requires finding the specific heading for the track (e.g., `## [~] Track: <Description>`) and replacing it with the completed status (e.g., `## [x] Track: <Description>`).
-    -   Announce that the track is fully complete and the tracks file has been updated.
+    b. **Announce:** State that you will now execute the tasks from the track's `plan.md` by spawning focused agents for each task. Each agent will assess completion or implement following `workflow.md` procedures.
+
+    c. **Iterate Through Tasks:** You MUST now loop through each task in the track's `plan.md` one by one.
+
+    d. **For Each Task, You MUST:**
+        i. **PRE-TASK THROTTLE CHECK** (from Section 2.1):
+                -   Check task/file/time/heap limits
+                -   **If any limit exceeded**:
+                        a. **RESET IN-PROGRESS TASKS**: Find any `[~]` tasks in plan.md and change back to `[ ]`
+                        b. **SAVE PLAN**: Write updated plan.md to disk
+                        c. **ANNOUNCE LIMITS**: Report which limit was hit and progress summary
+                        d. **STOP EXECUTION**: Return to user immediately
+                        e. **DO NOT continue** to next task
+                        f. **DO NOT mark track complete**
+
+        ii. **Skip Completed Tasks:** If task is already `[x]`, skip to next task
+
+        iii. **Mark Task In Progress:** Change `[ ]` to `[~]` in plan.md and save
+
+        iv. **Execute Task via Focused Agent (Context-Bounded):**
+                a. **Extract Task Context:** Identify the current task name, description, and any acceptance criteria from plan.md
+                b. **Apply Context Boundary Engineering (Section 2.2):**
+                   - Extract ONLY the spec section relevant to this task (~500 tokens max)
+                   - Include ONLY workflow cycle rules, not full workflow.md
+                   - Include ONLY tech constraints, not full tech-stack.md
+                   - DO NOT include this implement protocol
+                   - DO NOT include tracks.md or other track data
+                c. **Prepare Minimal Task Prompt (~1200 tokens overhead max):**
+                   ```
+                   TASK: <task_name_from_plan>
+                   ACCEPTANCE: <criteria_from_plan>
+
+                   SPEC EXCERPT (this task only):
+                   <extracted_spec_section>
+
+                   WORKFLOW CYCLE:
+                   1. Write failing test (Red)
+                   2. Implement to pass (Green)  
+                   3. Refactor
+                   4. Verify coverage >80%
+                   5. Commit with message
+
+                   TECH CONSTRAINTS:
+                   - Language: <from tech-stack>
+                   - Framework: <from tech-stack>
+                   - Test runner: <from tech-stack>
+
+                   OBJECTIVE:
+                   1. Assess: Is this task already complete in codebase?
+                   2. If complete: Report evidence and exit
+                   3. If incomplete: Implement following workflow cycle
+                   4. Load files on-demand only (use search/grep first)
+
+                   OUTPUT (structured):
+                   STATUS: COMPLETE | IMPLEMENTED
+                   EVIDENCE: <what exists now>
+                   COMMIT_SHA: <sha if implemented>
+                   FILES_TOUCHED: <count>
+                   ```
+                d. **Spawn Task Agent:** Use Task tool (Claude) or shell + gemini -i (Gemini) with the bounded prompt
+                e. **Await Result:** Block until task agent returns
+                f. **Parse Result:** Extract STATUS, COMMIT_SHA, FILES_TOUCHED from agent output
+                g. **Update Counters:** Add FILES_TOUCHED to files_processed_this_session
+
+        v. **Mark Task Complete:**
+                a. Change `[~]` to `[x]` in plan.md
+                b. If COMMIT_SHA was returned, append it to task: `[x] Task name [<sha>]`
+                c. Save plan.md
+
+        vi. **Increment Counters:**
+                -   `tasks_completed_this_session += 1`
+                -   `files_processed_this_session += number_of_files_touched`
+
+5.  **Verification Checkpoint:**
+    -   After all tasks in the track's local `plan.md` are marked `[x]`, DO NOT mark track as complete yet.
+    -   Proceed to Verification Protocol (section 5.5) before finalization.
 
 ---
 
-## 6.0 SYNCHRONIZE PROJECT DOCUMENTATION
+## 5.5 VERIFICATION PROTOCOL (DOUBLE-TAP)
+**PROTOCOL: Spawn independent verification agent with disjoint context.**
+
+**CRITICAL: This creates a separate LLM context with NO exposure to implementation bias.**
+
+1.  **Execution Trigger:** After all tasks in `plan.md` are marked `[x]`, but BEFORE updating `conductor/tracks.md` to `[x]`.
+
+2.  **Prepare Verification Payload:**
+    You MUST gather the following for the verification agent:
+    a. **Spec content:** Full text of `conductor/tracks/<track_id>/spec.md`
+    b. **Current file tree:** `git ls-tree -r HEAD` (all files in current state)
+    c. **Relevant file contents:** Read actual current content of files touched by this track
+    d. **Tech stack:** `conductor/tech-stack.md`
+    e. **Product context:** `conductor/product.md`
+    f. **Test files:** Current test file contents
+
+3.  **Detect Platform:**
+    Determine which platform you are running on:
+    - **Claude/OpenCode:** You have access to the `Task` tool
+    - **Gemini CLI:** You have access to the `shell` tool and can invoke `gemini -i`
+
+4.  **Spawn Verification Agent (Platform-Specific):**
+
+    **FOR CLAUDE/OPENCODE:**
+    Use the `Task` tool with the following prompt:
+
+    ```
+    You are an independent verification agent. Your task is to perform gap analysis comparing spec requirements against CURRENT codebase state.
+
+    INPUT YOU RECEIVE:
+    - Spec requirements: <spec_content>
+    - Current file tree: <git_ls_tree_output>
+    - Current file contents: <actual_file_contents>
+    - Test file contents: <test_file_contents>
+    - Tech stack: <tech_stack_content>
+    - Product context: <product_content>
+
+    YOUR JOB:
+    Compare the spec requirements against the CURRENT STATE of the codebase to identify gaps.
+
+    For each spec requirement:
+    1. Extract: What does the spec require?
+    2. Verify: Does the current codebase contain this functionality?
+    3. Test: Do tests exist that verify this requirement?
+    4. Categorize: VERIFIED | PARTIAL | MISSING
+
+    OUTPUT FORMAT (strictly follow - FACTS ONLY, NO VERDICT):
+    === GAP ANALYSIS REPORT ===
+    Track: <track_description>
+
+    REQUIREMENT ANALYSIS:
+    1. [<requirement_name>]
+       - Spec requires: <from spec text>
+       - Current state shows: <what exists in codebase NOW>
+       - Tests: <yes/no, which test files>
+       - Status: VERIFIED | PARTIAL | MISSING
+       - If PARTIAL/MISSING: Specific gap description
+
+    [... repeat for all requirements ...]
+
+    GAP SUMMARY:
+    - Total requirements: <n>
+    - Verified: <n>
+    - Partial: <n>
+    - Missing: <n>
+
+    END REPORT
+    ```
+
+    **FOR GEMINI CLI:**
+    Follow this exact sequence to spawn an isolated verification agent:
+
+    a. **Create Verification Prompt File:** Write the following to `conductor/tmp/.verify_prompt_<track_id>.md`:
+
+    ```markdown
+    You are an independent verification agent. Your task is to perform gap analysis comparing spec requirements against CURRENT codebase state.
+
+    CRITICAL: You are running in an isolated session with NO access to the implementation context.
+
+    INPUT AVAILABLE TO YOU:
+    - Spec: Read from <spec_path>
+    - File tree: Generated by `git ls-tree -r HEAD`
+    - File contents: Read from individual file paths as needed
+    - Tech stack: Read from <tech_stack_path>
+    - Product context: Read from <product_path>
+
+    YOUR JOB:
+    Compare the spec requirements against the CURRENT STATE of the codebase to identify gaps.
+
+    For each spec requirement:
+    1. Extract: What does the spec require?
+    2. Verify: Does the current codebase contain this functionality?
+    3. Test: Do tests exist that verify this requirement?
+    4. Categorize: VERIFIED | PARTIAL | MISSING
+
+    OUTPUT FORMAT (strictly follow - FACTS ONLY, NO VERDICT):
+    === GAP ANALYSIS REPORT ===
+    Track: <track_description>
+
+    REQUIREMENT ANALYSIS:
+    1. [<requirement_name>]
+       - Spec requires: <from spec text>
+       - Current state shows: <what exists in codebase NOW>
+       - Tests: <yes/no, which test files>
+       - Status: VERIFIED | PARTIAL | MISSING
+       - If PARTIAL/MISSING: Specific gap description
+
+    [... repeat for all requirements ...]
+
+    GAP SUMMARY:
+    - Total requirements: <n>
+    - Verified: <n>
+    - Partial: <n>
+    - Missing: <n>
+
+    WRITE YOUR REPORT TO: <report_path>
+
+    END REPORT
+    ```
+
+    b. **Create Output File:** Create empty file at `conductor/tmp/.verify_report_<track_id>.md`
+
+    c. **Spawn Isolated Agent:** Use the `shell` tool to execute:
+    ```bash
+    gemini -i "read conductor/tmp/.verify_prompt_<track_id>.md and execute the verification protocol within"
+    ```
+
+    d. **Wait for Completion:** The gemini session will complete when the verification agent finishes
+
+    e. **Read Report:** Read the gap analysis from `conductor/tmp/.verify_report_<track_id>.md`
+
+5.  **Await Gap Analysis:**
+    - **Claude/OpenCode:** Use `TaskOutput` to block until verification completes
+    - **Gemini CLI:** The shell command blocks; read the report file after completion
+    - Receive the gap analysis report from the agent
+
+6.  **Pre-[x] Predicate Sanity Check:**
+    YOU (the main context) must now perform sanity checking on the gap analysis:
+
+    a. **Parse the Report:** Extract each requirement's status and evidence.
+
+    b. **Sanity Check Criteria:** A requirement is ONLY considered verified if:
+       - Status is VERIFIED
+       - Current state shows the required functionality exists
+       - Tests exist AND cover the requirement
+       - No gaps described
+
+    c. **Predicate Decision:** Based on sanity check, determine:
+       - **ALL requirements verified with evidence** → CONFIRMED
+       - **ANY requirement PARTIAL or MISSING** → RESUME_REQUIRED
+
+    d. **Handle Decision:**
+
+        **If CONFIRMED:**
+        - Proceed to section 6.0 "Finalize Track"
+        - Update track status to `[x]` in `conductor/tracks.md`
+        - Announce verification passed with evidence summary
+        - Clean up temporary files (for Gemini: remove `conductor/tmp/.verify_*`)
+
+        **If RESUME_REQUIRED:**
+        - DO NOT mark track as `[x]`
+        - Present the gap analysis report to user
+        - Identify which tasks in `plan.md` correspond to gaps
+        - Change those tasks from `[x]` back to `[ ]`
+        - Resume implementation to complete gaps
+        - After completing gaps, RE-RUN this Verification Protocol
+
+7.  **Verification Independence Guarantee:**
+    - The verification agent receives NO context from implementation
+    - It has NO access to plan.md task checkboxes
+    - It has NO exposure to "I think I'm done" signaling
+    - Its analysis is based solely on spec requirements vs current codebase state
+    - **Gemini CLI specifically:** New session via `gemini -i` ensures complete context isolation
+
+---
+
+## 6.0 FINALIZE TRACK
+**PROTOCOL: Confirm and finalize track status after verification.**
+
+1.  **Execution Trigger:** ONLY after Verification Protocol returns CONFIRMED.
+
+2.  **Update Status to Completed:**
+    -   Update the track's status in `conductor/tracks.md` from `[~]` to `[x]`.
+    -   This requires finding the specific heading (e.g., `## [~] Track: <Description>`) and replacing it with `## [x] Track: <Description>`.
+
+3.  **Commit Changes:** Stage `conductor/tracks.md` and commit with the message `chore(conductor): Mark track '<track_description>' as complete`.
+
+4.  **Announce Completion:** Announce that the track has passed independent verification and is now fully complete.
+
+---
+
+## 7.0 SYNCHRONIZE PROJECT DOCUMENTATION
 **PROTOCOL: Update project-level documentation based on the completed track.**
 
 1.  **Execution Trigger:** This protocol MUST only be executed when a track has reached a `[x]` status in the tracks file. DO NOT execute this protocol for any other track status changes.
@@ -126,6 +502,9 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         iv. **Action:** Only after receiving explicit user confirmation, perform the file edits. Keep a record of whether this file was changed.
 
 6.  **Final Report:** Announce the completion of the synchronization process and provide a summary of the actions taken.
+    - **Commit Changes:**
+        - If any files were changed (`product.md`, `tech-stack.md`, or `product-guidelines.md`), you MUST stage them and commit them.
+        - **Commit Message:** `docs(conductor): Synchronize docs for track '<track_description>'`
     - **Construct the Message:** Based on the records of which files were changed, construct a summary message.
     - **Example (if product.md was changed, but others were not):**
         > "Documentation synchronization is complete.
@@ -137,7 +516,7 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 
 ---
 
-## 7.0 TRACK CLEANUP
+## 8.0 TRACK CLEANUP
 **PROTOCOL: Offer to archive or delete the completed track.**
 
 1.  **Execution Trigger:** This protocol MUST only be executed after the current track has been successfully implemented and the `SYNCHRONIZE PROJECT DOCUMENTATION` step is complete.
@@ -154,7 +533,8 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         i.   **Create Archive Directory:** Check for the existence of `conductor/archive/`. If it does not exist, create it.
         ii.  **Archive Track Folder:** Move the track's folder from `conductor/tracks/<track_id>` to `conductor/archive/<track_id>`.
         iii. **Remove from Tracks File:** Read the content of `conductor/tracks.md`, remove the entire section for the completed track (the part that starts with `---` and contains the track description), and write the modified content back to the file.
-        iv.  **Announce Success:** Announce: "Track '<track_description>' has been successfully archived."
+        iv.  **Commit Changes:** Stage `conductor/tracks.md` and `conductor/archive/`. Commit with the message `chore(conductor): Archive track '<track_description>'`.
+        v.   **Announce Success:** Announce: "Track '<track_description>' has been successfully archived."
     *   **If user chooses "B" (Delete):**
         i. **CRITICAL WARNING:** Before proceeding, you MUST ask for a final confirmation due to the irreversible nature of the action.
             > "WARNING: This will permanently delete the track folder and all its contents. This action cannot be undone. Are you sure you want to proceed? (yes/no)"
@@ -162,7 +542,8 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
             - **If 'yes'**:
                 a. **Delete Track Folder:** Permanently delete the track's folder from `conductor/tracks/<track_id>`.
                 b. **Remove from Tracks File:** Read the content of `conductor/tracks.md`, remove the entire section for the completed track, and write the modified content back to the file.
-                c. **Announce Success:** Announce: "Track '<track_description>' has been permanently deleted."
+                c. **Commit Changes:** Stage `conductor/tracks.md` and the deletion of `conductor/tracks/<track_id>`. Commit with the message `chore(conductor): Delete track '<track_description>'`.
+                d. **Announce Success:** Announce: "Track '<track_description>' has been permanently deleted."
             - **If 'no' (or anything else)**:
                 a. **Announce Cancellation:** Announce: "Deletion cancelled. The track has not been changed."
     *   **If user chooses "C" (Skip) or provides any other input:**
