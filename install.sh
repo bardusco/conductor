@@ -4,9 +4,10 @@
 
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-# Safety: ensure running from the repository root
-if [ "$(pwd)" != "$ROOT" ]; then
-  echo "Installer must be run from the repository root. Current directory: $(pwd)"
+
+# Guard: do not run installer from the repository root
+if [ "$(pwd)" = "$ROOT" ]; then
+  echo "Installer must not be run from the Conductor source tree (current directory: $(pwd))."
   exit 1
 fi
 
@@ -22,7 +23,7 @@ for dir in "$HOME/.opencode/skill/conductor" "$HOME/.claude/skills/conductor" "$
     echo "  $dir"
 done
 
-dir="$HOME/.gemini/extensions/conductor"
+ dir="$HOME/.gemini/extensions/conductor"
 rm -rf "$dir"
 mkdir -p "$dir"
 cp "$ROOT/GEMINI.md" "$dir/"
@@ -31,7 +32,7 @@ ln -s "$ROOT/commands" "$dir/commands"
 ln -s "$ROOT/templates" "$dir/templates"
 echo "  $dir (Gemini CLI)"
 
-dir="$HOME/.gemini/antigravity/skills/conductor"
+ dir="$HOME/.gemini/antigravity/skills/conductor"
 rm -rf "$dir"
 mkdir -p "$dir"
 cp "$ROOT/skill/SKILL.md" "$dir/"
