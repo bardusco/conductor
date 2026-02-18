@@ -1,33 +1,42 @@
-#!/usr/bin/env bash
-# Resolve script directory # 解析脚本目录
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+#!/bin/bash
+# Install Conductor for OpenCode, Claude, Codex, Gemini CLI, Antigravity
+# Usage: ./install.sh
 
-# Generic installer # 通用安装函数
-# $1 = target directory, $2 = type (skill|gemini) # $1 = 目标目录, $2 = 类型 (skill|gemini)
-install() {
-    local TARGET="$1"
-    local TYPE="$2"
-    echo "  $TARGET"
-    rm -rf "$TARGET" && mkdir -p "$TARGET"
-    if [[ "$TYPE" == "gemini" ]]; then
-        cp "$ROOT/GEMINI.md" "$TARGET/"
-        cp "$ROOT/gemini-extension.json" "$TARGET/"
-    else
-        cp "$ROOT/skill/SKILL.md" "$TARGET/"
-    fi
-    ln -s "$ROOT/commands" "$TARGET/commands"
-    ln -s "$ROOT/templates" "$TARGET/templates"
-}
+set -e
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+# Safety: ensure running from the repository root
+if [ "$(pwd)" != "$ROOT" ]; then
+  echo "Installer must be run from the repository root. Current directory: $(pwd)"
+  exit 1
+fi
 
-# Install primary skill destinations # 安装主要技能目录
-for DIR in "$HOME/.opencode/skill/conductor" "$HOME/.claude/skills/conductor" "$HOME/.codex/skills/conductor"; do
-    install "$DIR" skill
+echo "Installing Conductor..."
+
+for dir in "$HOME/.opencode/skill/conductor" "$HOME/.claude/skills/conductor" "$HOME/.codex/skills/conductor"; do
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    cp "$ROOT/skill/SKILL.md" "$dir/"
+    cp "$ROOT/conductor/methodology_compact.md" "$dir/methodology_compact.md"
+    ln -s "$ROOT/commands" "$dir/commands"
+    ln -s "$ROOT/templates" "$dir/templates"
+    echo "  $dir"
 done
 
-# Gemini extensions # Gemini 扩展
-install "$HOME/.gemini/extensions/conductor" gemini
-install "$HOME/.gemini/antigravity/skills/conductor" skill
+dir="$HOME/.gemini/extensions/conductor"
+rm -rf "$dir"
+mkdir -p "$dir"
+cp "$ROOT/GEMINI.md" "$dir/"
+cp "$ROOT/gemini-extension.json" "$dir/"
+ln -s "$ROOT/commands" "$dir/commands"
+ln -s "$ROOT/templates" "$dir/templates"
+echo "  $dir (Gemini CLI)"
 
-# Final user message (English outward) # 最终用户提示（英文）
-echo "Done – restart your AI shell."
+dir="$HOME/.gemini/antigravity/skills/conductor"
+rm -rf "$dir"
+mkdir -p "$dir"
+cp "$ROOT/skill/SKILL.md" "$dir/"
+ln -s "$ROOT/commands" "$dir/commands"
+ln -s "$ROOT/templates" "$dir/templates"
+echo "  $dir"
 
+echo "Done. Restart your AI shell."
