@@ -18,17 +18,20 @@ cmd="$1"
 shift || true
 
 if command -v conductor >/dev/null 2>&1; then
-  conductor "$cmd" "$@"
-else
-  toml="$CMD_DIR/${cmd}.toml"
-  if [ -f "$toml" ]; then
-    echo "No 'conductor' binary installed. Showing TOML: $toml"
-    echo "---"
-    sed -n '1,200p' "$toml"
-  else
-    echo "Unknown command: $cmd"
-    echo "Available:"
-    ls -1 "$CMD_DIR" | sed 's/\.toml$//'
-    exit 2
+  # Prefer local invocation of the conductor CLI if present in the repo
+  if [ -x "$REPO_ROOT/conductor" ]; then
+    "$REPO_ROOT/conductor" "$cmd" "$@"
+    exit 0
   fi
+fi
+# Fallback: show the TOML for the requested command (local project assumption)
+if [ -f "$toml" ]; then
+  echo "Showing TOML for '$cmd' (local project):"
+  echo "---"
+  sed -n '1,200p' "$toml"
+else
+  echo "Unknown command: $cmd"
+  echo "Available commands:"
+  ls -1 "$CMD_DIR" | sed 's/\.toml$//'
+  exit 2
 fi

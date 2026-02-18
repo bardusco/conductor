@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Resolve script directory # 解析脚本目录
+# Resolve script directory
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Generic installer # 通用安装函数
-# $1 = target directory, $2 = type (skill|gemini) # $1 = 目标目录, $2 = 类型 (skill|gemini)
+# Generic installer
+# $1 = target directory, $2 = type (skill|gemini)
 install() {
     local TARGET="$1"
     local TYPE="$2"
@@ -19,15 +19,14 @@ install() {
     ln -s "$ROOT/templates" "$TARGET/templates"
 }
 
-# Install primary skill destinations # 安装主要技能目录
+# Install primary skill destinations
 for DIR in "$HOME/.opencode/skill/conductor" "$HOME/.claude/skills/conductor" "$HOME/.codex/skills/conductor"; do
     install "$DIR" skill
 done
 
-# Gemini extensions # Gemini 扩展
+# Gemini extensions
 install "$HOME/.gemini/extensions/conductor" gemini
 install "$HOME/.gemini/antigravity/skills/conductor" skill
 
-# Final user message (English outward) # 最终用户提示（英文）
+# Final user message
 echo "Done – restart your AI shell."
-

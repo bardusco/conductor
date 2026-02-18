@@ -26,7 +26,7 @@ install_skill() {
     echo "  $TARGET"
     rm -rf "$TARGET"
     mkdir -p "$TARGET"
-    cp "$CONTEXT_FILE" "$TARGET/SKILL.md"
+    cp "$CONTEXT_FILE" "$TARGET/SKILL.md" && cp "$CONDUCTOR_ROOT/conductor/methodology_compact.md" "$TARGET/methodology.md"
     ln -s "$CONDUCTOR_ROOT/commands" "$TARGET/commands"
     ln -s "$CONDUCTOR_ROOT/templates" "$TARGET/templates"
 }
