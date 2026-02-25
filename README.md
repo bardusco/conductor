@@ -52,6 +52,12 @@ conductor/
 
 Your AI agent reads these files and follows the protocols in `commands/conductor/*.toml` to plan, implement, and track work consistently.
 
+## Low-Token Queueing
+
+Conductor's practical "queue" is the track plan itself: a durable checklist in `conductor/tracks/<track_id>/plan.md`. Agents can stop and re-enter by rereading repo state instead of relying on fragile in-memory session history.
+
+This release tightens that loop with smaller command prompts and lightweight runtime helpers (`skill/scripts/run-conductor.sh` and the Copilot `conductor-agent` wrapper), so the next action is cheap to recover and execute.
+
 ## Commands
 
 | Command | Purpose |

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1](https://github.com/jnorthrup/conductor/compare/conductor-v0.3.0...conductor-v0.3.1) (2026-02-25)
+
+### Features
+
+* add compact-token conductor command prompts for `implement`, `newTrack`, and `status`
+* package compact methodology files consistently across Claude/Codex/OpenCode/Gemini skill installs
+* improve Copilot adapters to use the shared `run-conductor.sh` runtime fallback tool
+
+### Bug Fixes
+
+* fix `run-conductor.sh` local binary detection when `conductor/` is a directory
+* fix `conductor-agent` homedir runtime wrapper path plumbing for fallback execution
+
+
 ## [0.3.0](https://github.com/jnorthrup/conductor/compare/conductor-v0.2.0...conductor-v0.3.0) (2026-01-19)
 
 
