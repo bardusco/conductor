@@ -9,6 +9,7 @@ Productivity rules:
 - Do not pause for confirmation when the requested track is an exact match.
 - In a dirty repo, never revert unrelated changes.
 - Validate changes with focused checks/tests before marking tasks complete.
+- Prefer "100% slices" first: work executable with zero additional discovery cost in the current invocation.
 
 If a tool call fails, report the failure and either recover or stop with a concrete blocker.
 
@@ -44,6 +45,16 @@ If a tool call fails, report the failure and either recover or stop with a concr
    - `conductor/workflow.md` (if present)
 2. If `metadata.json` exists, read it and keep status/timestamp in sync as you progress.
 3. Identify the next actionable task in `plan.md` (first `[ ]` task; if subtasks exist, prefer the first pending subtask).
+4. If the plan includes explicit `100% Slices (Zero-Discovery)` / `Decision Queue` / `Backlog` sections, prioritize the first pending task in `100% Slices (Zero-Discovery)`.
+
+### 100% Slice Rule (Execution)
+A task is `100%` only if it can be completed now without:
+- reading additional files not already loaded in this invocation,
+- investigating new subsystems/background code,
+- external docs/web lookups,
+- unresolved product/semantic decisions.
+
+If any of the above is required, the task is not `100%` for this invocation.
 
 ---
 
@@ -53,7 +64,12 @@ If a tool call fails, report the failure and either recover or stop with a concr
 3. Assess whether the task is already complete in the codebase:
    - If yes, gather file/test evidence, mark `[x]`, and continue to the next task.
 4. If incomplete, implement a real slice now:
-   - Read only the files needed.
+   - First check whether the selected task is `100%` under the rule above.
+   - If it is not `100%`, do not expand discovery blindly. Instead:
+     - note why it is not `100%` (`file-read`, `subsystem-read`, `external`, or `decision`)
+     - split out at least one smaller `100%` subtask when possible
+     - record the remaining item in `Decision Queue` or `Backlog` in `plan.md` (preserve existing style if present)
+   - Read only the files needed for the chosen `100%` slice.
    - Make code changes.
    - Add/update tests when practical.
    - Run focused validation (targeted tests/checks/lint/build) relevant to the changed files.
@@ -66,6 +82,7 @@ Guidance:
 - Complete at least one meaningful task per invocation when feasible.
 - It is acceptable to complete multiple adjacent tasks if they are tightly coupled and validated together.
 - Prefer targeted commands (`rg`, focused tests) over broad scans.
+- If no pending task is `100%`, still deliver a cheaper next step by editing `plan.md` to create at least one explicit `100%` subtask or a concrete decision question.
 
 ---
 
@@ -84,6 +101,8 @@ Guidance:
 Return a concise execution summary with:
 - Track selected (`track_id`)
 - Task(s) completed / in progress
+- `100%` slice executed (or why none existed)
+- any `Decision Queue` / `Backlog` updates created this invocation
 - Files changed
 - Validation run + result
 - Remaining blocker(s) or next recommended task
