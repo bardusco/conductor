@@ -8,22 +8,25 @@ set -euo pipefail
 INSTALL_DIR="$HOME/.local/bin"
 WRAPPER="$INSTALL_DIR/conductor-agent"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUN_CONDUCTOR="$REPO_ROOT/skill/scripts/run-conductor.sh"
 
 mkdir -p "$INSTALL_DIR"
 
-cat > "$WRAPPER" <<'EOF'
+cat > "$WRAPPER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
 # Wrapper: prefer installed 'conductor' CLI, otherwise invoke repository's skill script
 if command -v conductor >/dev/null 2>&1; then
-  conductor "$@"
+  conductor "\$@"
 else
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-  if [ -x "$REPO_ROOT/skill/scripts/run-conductor.sh" ]; then
-    "$REPO_ROOT/skill/scripts/run-conductor.sh" "$@"
+  REPO_ROOT="\${CONDUCTOR_REPO_ROOT:-$REPO_ROOT}"
+  RUN_CONDUCTOR="\$REPO_ROOT/skill/scripts/run-conductor.sh"
+  if [ -x "\$RUN_CONDUCTOR" ]; then
+    "\$RUN_CONDUCTOR" "\$@"
   else
-    echo "No conductor CLI available and no repository invoker found. Use the files in $REPO_ROOT/commands/conductor"
+    echo "No conductor CLI available and no repository invoker found. Expected: \$RUN_CONDUCTOR"
+    echo "Use the files in \$REPO_ROOT/commands/conductor or set CONDUCTOR_REPO_ROOT."
     exit 1
   fi
 fi
