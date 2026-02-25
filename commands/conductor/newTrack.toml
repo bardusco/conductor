@@ -8,7 +8,9 @@ Productivity rules:
 - If `{{args}}` is sufficient, draft `spec.md` and `plan.md` directly in one pass.
 - Use project context files to infer defaults.
 - Keep the plan executable (phases + concrete tasks with checkboxes).
-- Optimize for low discovery cost: prefer plans that maximize "100% slices" (work that requires no additional file reads/lookups beyond current context).
+- Optimize for low discovery cost, but do not force detailed `100%` slicing during track creation.
+- `newTrack` is a scope-capture step: maximize concrete feature coverage and capture unknowns; defer precise `100%` planning to execution start (`conductor implement`) when a bounded corpus can be declared.
+- Ask and answer the track-launch maneuvering question: "How do we line this up and knock it all down?"
 
 If a tool call fails, report the failure and stop or recover explicitly.
 
@@ -29,21 +31,22 @@ If a tool call fails, report the failure and stop or recover explicitly.
 2. Otherwise ask one concise question: "What track should I create?"
 3. Infer track type (`feature`, `bug`, `chore`, `refactor`, `program`) from the description.
 4. Derive a short slug (lowercase, hyphenated or underscored) for the track id.
-5. When the user request is broad/architectural, ask at most one additional clarification question that reduces discovery cost (prefer scope/order questions over implementation-detail questions).
+5. When the user request is broad/architectural, ask at most one additional clarification question that improves scope capture (prefer scope/order/outcome questions over implementation-detail questions).
+6. Prefer a single launch-shaping question when needed, e.g.:
+   - "How should we line this up and knock it all down?"
+   - Capture the user's best guess at adequate context hints up front (files/modules/subsystems/commits/traps) rather than forcing detailed decomposition.
 
-### Positional Questioning Rule (for cheaper track launches)
+### Positional Questioning Rule (scope-first track launches)
 When clarification is needed, ask/answer in this order and stop as soon as the track can be drafted:
 1. Exact user outcome (what "done" means).
 2. Current known context only (what is already in hand from `{{args}}` + project context files).
 3. In-scope now vs deferred.
-4. What can be executed with zero additional discovery ("100%" slices).
-5. What requires more reading/unknown decisions (backlog/decision queue).
+4. Author's best context hints (likely files/modules/subsystems/commits/traps).
+5. Likely workstreams / affected areas (high-level only; do not overfit to current guesses).
+6. Unknowns / decisions / risks to capture for later bounded planning.
 
-Definition of a `100%` slice for planning:
-- Requires no new files to read beyond what has already been read during this command.
-- Requires no background subsystem lookup or external docs/web search.
-- Requires no unresolved product/semantic decision.
-- Can be executed immediately by `conductor implement` with bounded validation.
+Do not spend track creation time trying to prove `100%` execution slices up front. `100%` claims are created per track when execution starts and the agent declares a bounded corpus.
+Cold tracks often launch with few/no `100%` slices; optimize for context acquisition order. Incremental/hot tracks may start with many `100%` slices because the active context is already warm.
 
 ---
 
@@ -73,14 +76,20 @@ Definition of a `100%` slice for planning:
    - Every task uses a checkbox (`[ ]`)
    - Include validation steps/tests
    - Add notes section if assumptions are made
-   - Add a **Discovery Cost / 100% Partition** section near the top with:
-     - `## 100% Slices (Zero-Discovery)` (immediate tasks)
-     - `## Decision Queue (<100%)` (questions/semantic choices)
-     - `## Backlog (Deferred)` (explicitly postponed)
-   - For each item in those sections, include lightweight metadata in the task text when practical:
-     - confidence (`100` or lower)
-     - discovery cost (`none`, `file-read`, `subsystem-read`, `external`)
-     - short reason if not `100`
+   - Add a **Scope Capture / Planning Handoff** section near the top with:
+     - `## Concrete Features` (explicit user-requested outcomes)
+     - `## Author Context Hints` (user-supplied best guesses at adequate starting context)
+     - `## Track Temperature` (`cold`, `warm`, or `hot`) with one-line rationale
+     - `## Candidate Workstreams` (high-level execution groupings)
+     - `## First Maneuver (Line It Up / Knock It Down)` (the hard question to tackle first and suggested context to load first)
+     - `## Unknowns / Decisions / Risks` (items requiring later repo reads or decisions)
+     - `## Deferred / Out-of-Scope for This Track` (explicitly postponed)
+   - Add a short note that detailed `100%` slices and bounded-corpus estimates are declared at execution start in `conductor implement`.
+   - Avoid fake precision; optional uncertainty labels like `certainty=high|med|low` are fine.
+   - Default temperature heuristics:
+     - `cold`: little prior context, likely no immediate `100%` slices
+     - `warm`: some known files/flows, bounded execution likely after limited reads
+     - `hot`: incremental follow-on with strong context hints and likely immediate `100%` slices
 
 Prefer drafting immediately. Only ask follow-up questions if the description is too ambiguous to produce a useful spec/plan.
 
@@ -110,8 +119,11 @@ Return:
 - files created/updated
 - inferred type
 - any assumptions that should be reviewed
-- highlighted `100%` slices (if any)
-- decision queue items / backlog split (if broad track)
+- captured concrete features
+- captured author context hints
+- track temperature (`cold`/`warm`/`hot`) + rationale
+- recommended first maneuver (what context to line up first and why)
+- unknowns / risks / deferred split (if broad track)
 - next command (`conductor implement`)
 
 Do not force a long approval loop unless the user explicitly asks for one.
