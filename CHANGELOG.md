@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/jnorthrup/conductor/compare/conductor-v0.3.0...conductor-v0.4.0) (2026-02-25)
+
+
+### Features
+
+* cherry-pick upstream improvements (platform-agnostic) ([5161731](https://github.com/jnorthrup/conductor/commit/5161731d145f666ec357e6a479189e85c3f52098))
+
+
+### Bug Fixes
+
+* **conductor:** adopt atomic improvements from gemini-cli-extensions (checkboxes, auto-commits, trailing newlines, legacy parsing) ([405e2a1](https://github.com/jnorthrup/conductor/commit/405e2a16e610ea0ef9b4649e80ec47d40025a905))
+* **installer:** simplify multi-platform install script ([7c2c96a](https://github.com/jnorthrup/conductor/commit/7c2c96a8a8235eb245694729fabb2c103c45af57))
+* restore installer, add methodology copy, enforce repo-root, no backups ([2fc57b5](https://github.com/jnorthrup/conductor/commit/2fc57b53a7187e24ff1d16f7881ebce5db1315bc))
+* restore original installer, add methodology copy, abort if run from repo root, no backups ([4a99d4b](https://github.com/jnorthrup/conductor/commit/4a99d4b4431887d277b7daf68db0e2ab442dbaaf))
+
 ## [0.3.0](https://github.com/jnorthrup/conductor/compare/conductor-v0.2.0...conductor-v0.3.0) (2026-01-19)
 
 
