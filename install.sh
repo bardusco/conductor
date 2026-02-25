@@ -13,14 +13,20 @@ fi
 
 echo "Installing Conductor..."
 
+install_skill_flavor() {
+  local dir="$1"
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  cp "$ROOT/skill/SKILL.md" "$dir/"
+  cp "$ROOT/skill/methodology_compact.md" "$dir/methodology_compact.md"
+  cp "$ROOT/skill/methodology_compact.md" "$dir/methodology.md"
+  ln -s "$ROOT/commands" "$dir/commands"
+  ln -s "$ROOT/templates" "$dir/templates"
+  echo "  $dir"
+}
+
 for dir in "$HOME/.opencode/skill/conductor" "$HOME/.claude/skills/conductor" "$HOME/.codex/skills/conductor"; do
-    rm -rf "$dir"
-    mkdir -p "$dir"
-    cp "$ROOT/skill/SKILL.md" "$dir/"
-    cp "$ROOT/conductor/methodology_compact.md" "$dir/methodology_compact.md"
-    ln -s "$ROOT/commands" "$dir/commands"
-    ln -s "$ROOT/templates" "$dir/templates"
-    echo "  $dir"
+  install_skill_flavor "$dir"
 done
 
  dir="$HOME/.gemini/extensions/conductor"
@@ -32,12 +38,7 @@ ln -s "$ROOT/commands" "$dir/commands"
 ln -s "$ROOT/templates" "$dir/templates"
 echo "  $dir (Gemini CLI)"
 
- dir="$HOME/.gemini/antigravity/skills/conductor"
-rm -rf "$dir"
-mkdir -p "$dir"
-cp "$ROOT/skill/SKILL.md" "$dir/"
-ln -s "$ROOT/commands" "$dir/commands"
-ln -s "$ROOT/templates" "$dir/templates"
-echo "  $dir"
+dir="$HOME/.gemini/antigravity/skills/conductor"
+install_skill_flavor "$dir"
 
 echo "Done. Restart your AI shell."

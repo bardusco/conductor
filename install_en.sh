@@ -14,6 +14,8 @@ install() {
         cp "$ROOT/gemini-extension.json" "$TARGET/"
     else
         cp "$ROOT/skill/SKILL.md" "$TARGET/"
+        cp "$ROOT/skill/methodology_compact.md" "$TARGET/methodology_compact.md"
+        cp "$ROOT/skill/methodology_compact.md" "$TARGET/methodology.md"
     fi
     ln -s "$ROOT/commands" "$TARGET/commands"
     ln -s "$ROOT/templates" "$TARGET/templates"
