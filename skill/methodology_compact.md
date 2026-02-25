@@ -10,3 +10,4 @@
 6. **Bilingual Accessibility (optional)** – If needed, the Chinese version can be generated on‑demand via `claude -p translate` and cached as a token in a JSON file; the main markdown stays concise.
 7. **Traceable Tokenisation** – Each paragraph in the English document can be assigned a unique token ID (e.g., `M001`). A JSON token file can map these IDs to translations, and agents can retrieve a token via `claude -p token-get M001`.
 8. **Minimal LLM Context** – By keeping the methodology to ≤ 100 lines, we ensure a small LLM context while preserving full expressive power.
+9. **Zero‑Discovery 100% Slices** – A task is “100%” only when it can be executed immediately with no new file reads, no subsystem spelunking, no external lookups, and no unresolved semantic decisions. Prefer plans that surface these slices first and backlog the rest.
